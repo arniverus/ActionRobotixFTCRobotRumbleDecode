@@ -116,9 +116,12 @@ public class RobotCentricRedFar extends OpMode {
         backRight.setPower(br / max);
 
         // 2. AUTO AIM + MANUAL ADJUST
+
+        // Manual Dpad Nudge (adjusts offset while auto-aiming or manual)
+        if (gamepad2.dpad_left)  autoAimOffset += 0.55;
+        if (gamepad2.dpad_right) autoAimOffset -= 0.55;
         if (gamepad2.right_trigger > 0.5) autoAim = true;
         if (gamepad2.left_trigger > 0.5) autoAim = false;
-
 
 
         if (gamepad2.right_stick_button) autoAimOffset = 0;
@@ -162,12 +165,12 @@ public class RobotCentricRedFar extends OpMode {
 
         // --- STOPPER & RGB INDICATOR LOGIC ---
         if (gamepad2.dpad_up) {
-            stopper.setPosition(0.7);
+            stopper.setPosition(1);
            // rgbIndicator.setPosition(0.277);
             //rgbIndicator2.setPosition(0.277);// Open
         }
         if (gamepad2.dpad_down) {
-            stopper.setPosition(0.3);
+            stopper.setPosition(0);
             //rgbIndicator.setPosition(0.500);
           //  rgbIndicator2.setPosition(0.500);// Closed
         }
@@ -178,8 +181,8 @@ public class RobotCentricRedFar extends OpMode {
         shooter2.setVelocity(shooterTargetVelocity);
 
         // Telemetry
-        telemetry.addData("Stopper Status", stopper.getPosition() == 0.3 ? "CLOSED" : "OPEN");
-        telemetry.addData("AutoAim", autoAim ? "ACTIVE" : "MANUAL");
+        telemetry.addData("Stopper Status", stopper.getPosition() == 0 ? "CLOSED" : "OPEN");
+        telemetry.addData("AutoAim", autoAim ? "ACTIVE": "MANUAL");
         telemetry.update();
     }
 }

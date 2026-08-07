@@ -63,7 +63,7 @@ public class RobotCentricTurretRedClose extends OpMode {
         hood     = hardwareMap.get(Servo.class, "hood");
         intake   = hardwareMap.get(DcMotor.class, "intake");
 
-        stopper.setDirection(Servo.Direction.REVERSE);
+        stopper.setDirection(Servo.Direction.FORWARD);
         shooter1.setDirection(DcMotorSimple.Direction.REVERSE);
 
         shooter1.setMode(DcMotor.RunMode.RUN_USING_ENCODER);

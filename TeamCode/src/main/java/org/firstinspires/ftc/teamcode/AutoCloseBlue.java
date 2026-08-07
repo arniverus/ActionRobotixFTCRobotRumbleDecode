@@ -176,12 +176,12 @@ public class AutoCloseBlue extends LinearOpMode {
     }
 
     private void runShootSequence(PathChain nextPath, int nextState) {
-        stopper.setPosition(0.3);
+        stopper.setPosition(1);
         intake.setPower(-0.6);
         // Using your 4-second wait logic for shooting
         if (pathTimer.getElapsedTimeSeconds() > 4.0) {
             intake.setPower(0);
-            stopper.setPosition(0.7);
+            stopper.setPosition(0);
             if (nextPath != null) follower.followPath(nextPath, 0.8, true);
             setPathState(nextState);
         }
@@ -213,6 +213,7 @@ public class AutoCloseBlue extends LinearOpMode {
         intake = hardwareMap.get(DcMotor.class, "intake");
         stopper = hardwareMap.get(Servo.class, "stopper");
 
+        stopper.setDirection(Servo.Direction.FORWARD);
         shooter1.setDirection(DcMotorSimple.Direction.REVERSE);
         shooter1.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         shooter2.setMode(DcMotor.RunMode.RUN_USING_ENCODER);

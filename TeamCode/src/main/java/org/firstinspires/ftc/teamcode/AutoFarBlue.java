@@ -59,12 +59,12 @@ public class AutoFarBlue extends LinearOpMode {
                 .build();
 
         p3_intake1 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(57.758, 22), new Pose(45,15)))
+                .addPath(new BezierLine(new Pose(57.758, 22), new Pose(90,15)))
                 .setLinearHeadingInterpolation(HEADING_INTAKE, HEADING_INTAKE)
                 .build();
 
         p4_shoot2 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(45, 15), new Pose(59.12, 11.02)))
+                .addPath(new BezierLine(new Pose(90, 15), new Pose(59.12, 11.02)))
                 .setLinearHeadingInterpolation(HEADING_INTAKE, HEADING_SHOOT)
                 .build();
 
@@ -182,10 +182,10 @@ public class AutoFarBlue extends LinearOpMode {
         double elapsed = pathTimer.getElapsedTimeSeconds();
 
         if (elapsed < 4.0) {
-            stopper.setPosition(0.3); // Open
+            stopper.setPosition(1); // Open
             intake.setPower(-1.0);
         } else {
-            stopper.setPosition(0.9); // Closed
+            stopper.setPosition(0); // Closed
             intake.setPower(0);
             if (nextPath != null) follower.followPath(nextPath, 0.8, true);
             setPathState(nextState);
@@ -222,6 +222,7 @@ public class AutoFarBlue extends LinearOpMode {
         stopper = hardwareMap.get(Servo.class, "stopper");
         hood = hardwareMap.get(Servo.class, "hood");
 
+        stopper.setDirection(Servo.Direction.FORWARD);
         shooter1.setDirection(DcMotorSimple.Direction.REVERSE);
         shooter1.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         shooter2.setMode(DcMotor.RunMode.RUN_USING_ENCODER);

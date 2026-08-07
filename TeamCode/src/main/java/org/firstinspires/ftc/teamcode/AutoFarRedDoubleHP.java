@@ -255,6 +255,7 @@ public class AutoFarRedDoubleHP extends LinearOpMode {
         stopper = hardwareMap.get(Servo.class, "stopper");
         hood = hardwareMap.get(Servo.class, "hood");
 
+        stopper.setDirection(Servo.Direction.FORWARD);
         shooter1.setDirection(DcMotorSimple.Direction.REVERSE);
         shooter1.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         shooter2.setMode(DcMotor.RunMode.RUN_USING_ENCODER);

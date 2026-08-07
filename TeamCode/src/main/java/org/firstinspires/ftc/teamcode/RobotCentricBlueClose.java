@@ -73,7 +73,7 @@ public class RobotCentricBlueClose extends OpMode {
         frontRight.setDirection(DcMotorSimple.Direction.REVERSE);
         backLeft.setDirection(DcMotorSimple.Direction.REVERSE);
 
-        stopper.setDirection(Servo.Direction.REVERSE);
+        stopper.setDirection(Servo.Direction.FORWARD);
         shooter2.setDirection(DcMotorSimple.Direction.REVERSE);
 
         shooter1.setMode(DcMotor.RunMode.RUN_USING_ENCODER);

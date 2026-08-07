@@ -33,12 +33,12 @@ public class AutoFarRed extends LinearOpMode {
 
     public void buildPaths() {
         initialShoot = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(88.348, 7.169), new Pose(90.880, 14.650)))
+                .addPath(new BezierLine(new Pose(88.348, 7.169), new Pose(90, 14.650)))
                 .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(72))
                 .build();
 
         goToIntakeReady = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(90.880, 14.650), new Pose(89.272, 35)))
+                .addPath(new BezierLine(new Pose(90, 14.650), new Pose(89.272, 35)))
                 .setLinearHeadingInterpolation(Math.toRadians(72), Math.toRadians(0))
                 .build();
 
@@ -203,6 +203,7 @@ public class AutoFarRed extends LinearOpMode {
         stopper = hardwareMap.get(Servo.class, "stopper");
         hood = hardwareMap.get(Servo.class, "hood");
 
+        stopper.setDirection(Servo.Direction.FORWARD);
         shooter1.setDirection(DcMotorSimple.Direction.REVERSE);
         shooter1.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         shooter2.setMode(DcMotor.RunMode.RUN_USING_ENCODER);

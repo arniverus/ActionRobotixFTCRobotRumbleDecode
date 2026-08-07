@@ -169,8 +169,8 @@ public class FarBlue extends OpMode {
         }
 
         // 6. STOPPER (Dpad Up Open, Dpad Down Close)
-        if (gamepad2.dpad_up)   stopper.setPosition(0.7); // Open (Shoot)
-        if (gamepad2.dpad_down) stopper.setPosition(0.3); // Closed (Hold)
+        if (gamepad2.dpad_up)   stopper.setPosition(1); // Open (Shoot)
+        if (gamepad2.dpad_down) stopper.setPosition(0); // Closed (Hold)
 
         shooter1.setVelocity(shooterTargetVelocity);
         shooter2.setVelocity(shooterTargetVelocity);

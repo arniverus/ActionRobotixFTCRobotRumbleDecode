@@ -179,11 +179,11 @@ public class AutoCloseRed extends LinearOpMode {
 
     private void runShootSequence(PathChain nextPath, int nextState) {
         hood.setPosition(0.35);
-        stopper.setPosition(0.3);
+        stopper.setPosition(1);
         intake.setPower(-1.0);
         if (pathTimer.getElapsedTimeSeconds() > 3.0) {
             intake.setPower(0);
-            stopper.setPosition(0.7);
+            stopper.setPosition(0);
             if (nextPath != null) follower.followPath(nextPath, 1.0, true);
             setPathState(nextState);
         }
@@ -214,6 +214,7 @@ public class AutoCloseRed extends LinearOpMode {
         shooter1.setDirection(DcMotorSimple.Direction.REVERSE);
         shooter1.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         shooter2.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        stopper.setDirection(Servo.Direction.FORWARD);
         hood = hardwareMap.get(Servo.class, "hood");
 
         PIDFCoefficients pidf = new PIDFCoefficients(SHOOTER_P, 0, 0, SHOOTER_F);

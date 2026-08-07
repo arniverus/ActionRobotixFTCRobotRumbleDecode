@@ -240,6 +240,7 @@ public class GateOpenAutoRed extends LinearOpMode {
         PIDFCoefficients pidf = new PIDFCoefficients(SHOOTER_P, 0, 0, SHOOTER_F);
         shooter1.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidf);
         shooter2.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidf);
+        stopper.setDirection(Servo.Direction.FORWARD);
         buildPaths();
         waitForStart();
         if (isStopRequested()) return;
