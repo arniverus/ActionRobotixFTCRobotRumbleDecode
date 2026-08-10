@@ -168,7 +168,7 @@ public class FarBlue extends OpMode {
             shooterTargetVelocity = 1400;
         } else if(gamepad2.b) {
             hood.setPosition(0.2);
-            shooterTargetVelocity = 1450;
+            shooterTargetVelocity = 0;
         }
 
         // 6. STOPPER (Dpad Up Open, Dpad Down Close)
