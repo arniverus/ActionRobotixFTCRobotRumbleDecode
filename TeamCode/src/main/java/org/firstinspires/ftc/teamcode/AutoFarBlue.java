@@ -32,9 +32,11 @@ public class AutoFarBlue extends LinearOpMode {
     private static final int BALLS_PER_SHOOT_CYCLE = 3;
     private static final int PLANNED_SHOT_COUNT = 15;
     private static final double MIN_SHOOTER_SPINUP_SECONDS = 0.45;
+    private static final double MAX_SHOOTER_READY_WAIT_SECONDS = 1.50;
     private static final double SHOOTER_READY_TOLERANCE = 75.0;
     private static final double BALL_FEED_SECONDS = 0.45;
     private static final double BALL_SETTLE_SECONDS = 0.20;
+    private static final double PATH_END_TIMEOUT_SECONDS = 6.0;
 
     // Turret PID Constants
     public static double Kp = 0.035, Ki = 0.0, Kd = 0.0032;
@@ -137,75 +139,92 @@ public class AutoFarBlue extends LinearOpMode {
                 setPathState(1);
                 break;
             case 1: // First position reached: shoot the preload, then collect cycle 1.
-                if (!follower.isBusy()) runShootSequence(p2_driveToIntake1, 2);
+                if (pathComplete()) runShootSequence(p2_driveToIntake1, 2);
                 break;
 
             // ---- Cycle 1 ----
             case 2: // Drive to intake, stopper closed, intake running
                 stopper.setPosition(STOPPER_CLOSED);
                 intake.setPower(-1.0);
-                if (!follower.isBusy()) {
+                if (pathComplete()) {
                     intake.setPower(0);
                     follower.followPath(p3_driveToShoot1, 0.7, true);
                     setPathState(3);
                 }
                 break;
             case 3: // Cycle 1 shooting position reached.
-                if (!follower.isBusy()) runShootSequence(p4_driveToHP, 4);
+                if (pathComplete()) runShootSequence(p4_driveToHP, 4);
                 break;
 
             // ---- Cycle 2 (HP grab) ----
             case 4: // Drive to HP zone, stopper closed, intake running
                 stopper.setPosition(STOPPER_CLOSED);
                 intake.setPower(-1.0);
-                if (!follower.isBusy()) {
+                if (pathComplete()) {
                     follower.followPath(p5_hpAdjust, 0.7, true);
                     setPathState(5);
                 }
                 break;
             case 5: // Finish HP grab, drive to shoot
-                if (!follower.isBusy()) {
+                if (pathComplete()) {
                     intake.setPower(0);
                     follower.followPath(p6_driveToShoot2, 0.7, true);
                     setPathState(6);
                 }
                 break;
             case 6: // Cycle 2 shooting position reached.
-                if (!follower.isBusy()) runShootSequence(p7_driveToIntake2, 7);
+                if (pathComplete()) runShootSequence(p7_driveToIntake2, 7);
                 break;
 
             // ---- Cycle 3 ----
             case 7: // Drive to intake, stopper closed, intake running
                 stopper.setPosition(STOPPER_CLOSED);
                 intake.setPower(-1.0);
-                if (!follower.isBusy()) {
+                if (pathComplete()) {
                     intake.setPower(0);
                     follower.followPath(p8_driveToShoot3, 0.7, true);
                     setPathState(8);
                 }
                 break;
             case 8: // Cycle 3 shooting position reached.
-                if (!follower.isBusy()) runShootSequence(p9_driveToIntake3, 9);
+                if (pathComplete()) runShootSequence(p9_driveToIntake3, 9);
                 break;
 
             // ---- Cycle 4 ----
             case 9: // Drive to intake, stopper closed, intake running
                 stopper.setPosition(STOPPER_CLOSED);
                 intake.setPower(-1.0);
-                if (!follower.isBusy()) {
+                if (pathComplete()) {
                     intake.setPower(0);
                     follower.followPath(p10_driveToShoot4, 0.7, true);
                     setPathState(10);
                 }
                 break;
             case 10: // Final shooting position reached.
-                if (!follower.isBusy()) runShootSequence(null, 11);
+                if (pathComplete()) runShootSequence(null, 11);
                 break;
 
             case 11:
-                if (!follower.isBusy()) stopRobot();
+                if (pathComplete()) stopRobot();
                 break;
         }
+    }
+
+    /**
+     * Pedro can remain busy at the end of a path if its final correction constraints
+     * are not reached. Accept the parametric end, and keep a final safety timeout so
+     * one imperfect localization reading cannot freeze the rest of autonomous.
+     */
+    private boolean pathComplete() {
+        if (!follower.isBusy()) return true;
+
+        if (follower.atParametricEnd()
+                || pathTimer.getElapsedTimeSeconds() >= PATH_END_TIMEOUT_SECONDS) {
+            follower.breakFollowing();
+            return true;
+        }
+
+        return false;
     }
 
     private void updateTurret() {
@@ -248,7 +267,8 @@ public class AutoFarBlue extends LinearOpMode {
         // Keep the gate closed until both flywheels have reached speed.  Starting the
         // shot timer only after that point prevents a slow spin-up from skipping balls.
         if (shootFeedStartSeconds < 0.0
-                && (elapsed < MIN_SHOOTER_SPINUP_SECONDS || !shooterReady)) {
+                && (elapsed < MIN_SHOOTER_SPINUP_SECONDS
+                || (!shooterReady && elapsed < MAX_SHOOTER_READY_WAIT_SECONDS))) {
             stopper.setPosition(STOPPER_CLOSED);
             intake.setPower(0);
             return;
@@ -310,7 +330,8 @@ public class AutoFarBlue extends LinearOpMode {
         stopper = hardwareMap.get(Servo.class, "stopper");
         hood = hardwareMap.get(Servo.class, "hood");
 
-        stopper.setDirection(Servo.Direction.FORWARD);
+        // Match the proven Far Blue TeleOp stopper configuration exactly.
+        stopper.setDirection(Servo.Direction.REVERSE);
 
         // Set the safe state before Start is pressed.  State 0 keeps it closed for
         // the entire first drive, so the robot always moves before it begins feeding.
@@ -336,7 +357,12 @@ public class AutoFarBlue extends LinearOpMode {
             autonomousPathUpdate();
             updateTurret();
             telemetry.addData("State", pathState);
+            telemetry.addData("Pose", follower.getPose());
+            telemetry.addData("Path T", "%.3f", follower.getCurrentTValue());
+            telemetry.addData("Follower Busy", follower.isBusy());
             telemetry.addData("Turret Pos", turret.getCurrentPosition());
+            telemetry.addData("Shooter Velocity", "%.0f / %.0f",
+                    shooter1.getVelocity(), shooter2.getVelocity());
             telemetry.addData("Shots Planned/Timed", "%d / %d", PLANNED_SHOT_COUNT, ballsScored);
             telemetry.addData("Stopper", shootSequenceStarted ? "shoot sequence" : "closed/transport");
             telemetry.update();

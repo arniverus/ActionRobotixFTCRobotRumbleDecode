@@ -163,17 +163,9 @@ public class RobotCentricRedFar extends OpMode {
         else if (gamepad2.y) { hood.setPosition(0.2); shooterTargetVelocity = 1100; }
         else if (gamepad2.a) { hood.setPosition(0.1); shooterTargetVelocity = 1400; }
 
-        // --- STOPPER & RGB INDICATOR LOGIC ---
-        if (gamepad2.dpad_up) {
-            stopper.setPosition(1);
-           // rgbIndicator.setPosition(0.277);
-            //rgbIndicator2.setPosition(0.277);// Open
-        }
-        if (gamepad2.dpad_down) {
-            stopper.setPosition(0);
-            //rgbIndicator.setPosition(0.500);
-          //  rgbIndicator2.setPosition(0.500);// Closed
-        }
+        // STOPPER — matches Far Blue TeleOp exactly.
+        if (gamepad2.dpad_down) stopper.setPosition(1); // Open (Shoot)
+        if (gamepad2.dpad_up) stopper.setPosition(0);   // Closed (Hold)
 
 
 

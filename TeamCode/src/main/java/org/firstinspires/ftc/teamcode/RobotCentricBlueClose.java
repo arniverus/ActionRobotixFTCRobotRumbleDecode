@@ -73,7 +73,7 @@ public class RobotCentricBlueClose extends OpMode {
         frontRight.setDirection(DcMotorSimple.Direction.REVERSE);
         backLeft.setDirection(DcMotorSimple.Direction.REVERSE);
 
-        stopper.setDirection(Servo.Direction.FORWARD);
+        stopper.setDirection(Servo.Direction.REVERSE);
         shooter2.setDirection(DcMotorSimple.Direction.REVERSE);
 
         shooter1.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -181,12 +181,9 @@ public class RobotCentricBlueClose extends OpMode {
         else
             intake.setPower(0);
 
-        // STOPPER
-        if (gamepad2.dpad_right) {
-            stopper.setPosition(0.3);
-            autoAim = false;
-        }
-        if (gamepad2.dpad_up) stopper.setPosition(0.7);
+        // STOPPER — matches Far Blue TeleOp exactly.
+        if (gamepad2.dpad_down) stopper.setPosition(1); // Open (Shoot)
+        if (gamepad2.dpad_up) stopper.setPosition(0);   // Closed (Hold)
 
         // SHOOTER PRESETS
         if (gamepad2.x) {

@@ -63,7 +63,7 @@ public class RobotCentricTurretRedClose extends OpMode {
         hood     = hardwareMap.get(Servo.class, "hood");
         intake   = hardwareMap.get(DcMotor.class, "intake");
 
-        stopper.setDirection(Servo.Direction.FORWARD);
+        stopper.setDirection(Servo.Direction.REVERSE);
         shooter1.setDirection(DcMotorSimple.Direction.REVERSE);
 
         shooter1.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -171,12 +171,9 @@ public class RobotCentricTurretRedClose extends OpMode {
             shooterTargetVelocity = 1800;
         }
 
-        if (gamepad2.dpad_up) {
-            stopper.setPosition(0.7); // Open
-        }
-        if (gamepad2.dpad_down) {
-            stopper.setPosition(0.3); // Closed
-        }
+        // STOPPER — matches Far Blue TeleOp exactly.
+        if (gamepad2.dpad_down) stopper.setPosition(1); // Open (Shoot)
+        if (gamepad2.dpad_up) stopper.setPosition(0);   // Closed (Hold)
 
         shooter1.setVelocity(shooterTargetVelocity);
         shooter2.setVelocity(shooterTargetVelocity);
