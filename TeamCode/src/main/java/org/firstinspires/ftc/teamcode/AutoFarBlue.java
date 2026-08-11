@@ -14,7 +14,7 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "Auto Far Blue", group = "Blue")
+@Autonomous(name = "Far Blue Auto", group = "Blue")
 public class AutoFarBlue extends LinearOpMode {
 
     private Follower follower;
@@ -29,6 +29,12 @@ public class AutoFarBlue extends LinearOpMode {
     public static double SHOOTER_P = -830.000;
     public static double SHOOTER_F = 1.00000;
     private final double SHOOT_VELOCITY = 1540;
+    private static final int BALLS_PER_SHOOT_CYCLE = 3;
+    private static final int PLANNED_SHOT_COUNT = 15;
+    private static final double MIN_SHOOTER_SPINUP_SECONDS = 0.45;
+    private static final double SHOOTER_READY_TOLERANCE = 75.0;
+    private static final double BALL_FEED_SECONDS = 0.45;
+    private static final double BALL_SETTLE_SECONDS = 0.20;
 
     // Turret PID Constants
     public static double Kp = 0.035, Ki = 0.0, Kd = 0.0032;
@@ -39,119 +45,222 @@ public class AutoFarBlue extends LinearOpMode {
     public static double GOAL_Y = 138;
 
     private double lastTurretError = 0, turretIntegral = 0;
-    private final double HEADING_SHOOT = Math.toRadians(125);
-    private final double HEADING_INTAKE = Math.toRadians(180);
+    private final double HEADING_SHOOT = Math.toRadians(115);
+
+    // Stopper positions
+    private final double STOPPER_CLOSED = 0.9; // holding balls in during transit
+    private final double STOPPER_OPEN = 0.3;   // feeding into shooter
 
     private boolean isFinished = false; // Flag to trigger zero-reset
+    private int ballsScored = 0;
+    private boolean shootSequenceStarted = false;
+    private double shootFeedStartSeconds = -1.0;
+    private PathChain shootNextPath;
+    private int shootNextState;
 
-    private PathChain p1_preload, p2_intakeReady1, p3_intake1, p4_shoot2,
-            p5_hpReady1, p6_hpIntake1, p6_hpReset, p7_shoot3, p11_park;
+    // Drive legs (tangent heading, no forced turn at the end)
+    private PathChain p1_driveToShoot,
+            p2_driveToIntake1, p3_driveToShoot1,
+            p4_driveToHP, p5_hpAdjust, p6_driveToShoot2,
+            p7_driveToIntake2, p8_driveToShoot3,
+            p9_driveToIntake3, p10_driveToShoot4;
+
+    // Turn-in-place legs (change heading to face the goal, then shoot)
+    private PathChain t1_turnToShoot, t2_turnToShoot, t3_turnToShoot,
+            t4_turnToShoot, t5_turnToShoot;
 
     public void buildPaths() {
-        p1_preload = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(55.25, 7.25), new Pose(59.12, 11.02)))
+        // ---- Preload ----
+        p1_driveToShoot = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(55.25, 7.25), new Pose(56.000, 34.000)))
+                .setTangentHeadingInterpolation()
+                .build();
+
+        t1_turnToShoot = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(56.000, 34.000), new Pose(56.000, 34.000)))
                 .setLinearHeadingInterpolation(Math.toRadians(90), HEADING_SHOOT)
                 .build();
 
-        p2_intakeReady1 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(59.12, 10.5), new Pose(57.758, 19)))
-                .setLinearHeadingInterpolation(HEADING_SHOOT, HEADING_INTAKE)
+        // ---- Cycle 1 ----
+        p2_driveToIntake1 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(56.000, 34.000), new Pose(11.000, 35.000)))
+                .setTangentHeadingInterpolation()
                 .build();
 
-        p3_intake1 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(57.758, 22), new Pose(90,15)))
-                .setLinearHeadingInterpolation(HEADING_INTAKE, HEADING_INTAKE)
+        p3_driveToShoot1 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(11.000, 35.000), new Pose(56.000, 34.000)))
+                .setTangentHeadingInterpolation()
                 .build();
 
-        p4_shoot2 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(90, 15), new Pose(59.12, 11.02)))
-                .setLinearHeadingInterpolation(HEADING_INTAKE, HEADING_SHOOT)
+        t2_turnToShoot = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(56.000, 34.000), new Pose(56.000, 34.000)))
+                .setConstantHeadingInterpolation(HEADING_SHOOT)
                 .build();
 
-        p5_hpReady1 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(59.12, 11.02), new Pose(38.342, 1)))
-                .setLinearHeadingInterpolation(HEADING_SHOOT, HEADING_INTAKE)
+        // ---- Cycle 2 (HP grab with reposition) ----
+        p4_driveToHP = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(56.000, 34.000), new Pose(6.000, 12.000)))
+                .setTangentHeadingInterpolation()
                 .build();
 
-        p6_hpIntake1 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(38.342, 1), new Pose(13, 1)))
-                .setLinearHeadingInterpolation(HEADING_INTAKE, HEADING_INTAKE)
+        p5_hpAdjust = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(6.000, 12.000), new Pose(20.000, 18.000)))
+                .setTangentHeadingInterpolation()
+                .setReversed()
                 .build();
 
-        p6_hpReset = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(13, 1), new Pose(25, 1)))
-                .setLinearHeadingInterpolation(HEADING_INTAKE, HEADING_INTAKE)
+        p6_driveToShoot2 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(20.000, 18.000), new Pose(56.000, 34.000)))
+                .setTangentHeadingInterpolation()
                 .build();
 
-        p7_shoot3 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(13, 1), new Pose(59.12, 11.02)))
-                .setLinearHeadingInterpolation(HEADING_INTAKE, HEADING_SHOOT)
+        t3_turnToShoot = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(56.000, 34.000), new Pose(56.000, 34.000)))
+                .setConstantHeadingInterpolation(HEADING_SHOOT)
                 .build();
 
-        p11_park = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(59.12, 11.02), new Pose(38.342, 2)))
-                .setLinearHeadingInterpolation(HEADING_SHOOT, HEADING_INTAKE)
+        // ---- Cycle 3 ----
+        p7_driveToIntake2 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(56.000, 34.000), new Pose(4.000, 34.000)))
+                .setTangentHeadingInterpolation()
+                .build();
+
+        p8_driveToShoot3 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(4.000, 34.000), new Pose(56.000, 34.000)))
+                .setTangentHeadingInterpolation()
+                .setReversed()
+                .build();
+
+        t4_turnToShoot = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(56.000, 34.000), new Pose(56.000, 34.000)))
+                .setConstantHeadingInterpolation(HEADING_SHOOT)
+                .build();
+
+        // ---- Cycle 4 ----
+        p9_driveToIntake3 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(56.000, 34.000), new Pose(7.000, 18.000)))
+                .setTangentHeadingInterpolation()
+                .build();
+
+        p10_driveToShoot4 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(7.000, 18.000), new Pose(56.000, 34.000)))
+                .setTangentHeadingInterpolation()
+                .setReversed()
+                .build();
+
+        t5_turnToShoot = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(56.000, 34.000), new Pose(56.000, 34.000)))
+                .setConstantHeadingInterpolation(HEADING_SHOOT)
                 .build();
     }
 
     public void autonomousPathUpdate() {
         switch (pathState) {
-            case 0:
+            // ---- Preload ----
+            case 0: // Drive to shoot pose, stopper closed holding balls
                 shooter1.setVelocity(SHOOT_VELOCITY);
                 shooter2.setVelocity(SHOOT_VELOCITY);
-                follower.followPath(p1_preload, 0.7, true);
+                stopper.setPosition(STOPPER_CLOSED);
+                follower.followPath(p1_driveToShoot, 0.7, true);
                 setPathState(1);
                 break;
-            case 1:
-                if (!follower.isBusy()) runShootSequence(p2_intakeReady1, 2);
-                break;
-            case 2:
+            case 1: // Arrived, now turn to face the goal
                 if (!follower.isBusy()) {
-                    intake.setPower(-1.0);
-                    follower.followPath(p3_intake1, 0.7, true);
-                    setPathState(3);
+                    follower.followPath(t1_turnToShoot, 0.7, true);
+                    setPathState(2);
                 }
                 break;
-            case 3:
+            case 2: // Heading set, shoot preload
+                if (!follower.isBusy()) runShootSequence(p2_driveToIntake1, 3);
+                break;
+
+            // ---- Cycle 1 ----
+            case 3: // Drive to intake, stopper closed, intake running
+                stopper.setPosition(STOPPER_CLOSED);
+                intake.setPower(-1.0);
                 if (!follower.isBusy()) {
                     intake.setPower(0);
-                    follower.followPath(p4_shoot2, 0.7, true);
+                    follower.followPath(p3_driveToShoot1, 0.7, true);
                     setPathState(4);
                 }
                 break;
-            case 4:
-                if (!follower.isBusy()) runShootSequence(p5_hpReady1, 5);
-                break;
-            case 5: // HP Grab 1
+            case 4: // Arrived, turn to face the goal
                 if (!follower.isBusy()) {
-                    intake.setPower(-1.0);
-                    follower.followPath(p6_hpIntake1, 0.7, true);
-                    setPathState(6);
+                    follower.followPath(t2_turnToShoot, 0.7, true);
+                    setPathState(5);
                 }
                 break;
-            case 6: // HP Reset
+            case 5: // Heading set, shoot cycle 1
+                if (!follower.isBusy()) runShootSequence(p4_driveToHP, 6);
+                break;
+
+            // ---- Cycle 2 (HP grab) ----
+            case 6: // Drive to HP zone, stopper closed, intake running
+                stopper.setPosition(STOPPER_CLOSED);
+                intake.setPower(-1.0);
                 if (!follower.isBusy()) {
-                    follower.followPath(p6_hpReset, 0.8, true);
+                    follower.followPath(p5_hpAdjust, 0.7, true);
                     setPathState(7);
                 }
                 break;
-            case 7: // HP Grab 2
+            case 7: // Finish HP grab, drive to shoot
                 if (!follower.isBusy()) {
-                    follower.followPath(p6_hpIntake1, 0.7, true);
+                    intake.setPower(0);
+                    follower.followPath(p6_driveToShoot2, 0.7, true);
                     setPathState(8);
                 }
                 break;
-            case 8: // Return to shoot
+            case 8: // Arrived, turn to face the goal
                 if (!follower.isBusy()) {
-                    intake.setPower(0);
-                    follower.followPath(p7_shoot3, 1.0, true);
+                    follower.followPath(t3_turnToShoot, 0.7, true);
                     setPathState(9);
                 }
                 break;
-            case 9:
-                if (!follower.isBusy()) runShootSequence(p11_park, 10);
+            case 9: // Heading set, shoot cycle 2
+                if (!follower.isBusy()) runShootSequence(p7_driveToIntake2, 10);
                 break;
-            case 10:
+
+            // ---- Cycle 3 ----
+            case 10: // Drive to intake, stopper closed, intake running
+                stopper.setPosition(STOPPER_CLOSED);
+                intake.setPower(-1.0);
+                if (!follower.isBusy()) {
+                    intake.setPower(0);
+                    follower.followPath(p8_driveToShoot3, 0.7, true);
+                    setPathState(11);
+                }
+                break;
+            case 11: // Arrived, turn to face the goal
+                if (!follower.isBusy()) {
+                    follower.followPath(t4_turnToShoot, 0.7, true);
+                    setPathState(12);
+                }
+                break;
+            case 12: // Heading set, shoot cycle 3
+                if (!follower.isBusy()) runShootSequence(p9_driveToIntake3, 13);
+                break;
+
+            // ---- Cycle 4 ----
+            case 13: // Drive to intake, stopper closed, intake running
+                stopper.setPosition(STOPPER_CLOSED);
+                intake.setPower(-1.0);
+                if (!follower.isBusy()) {
+                    intake.setPower(0);
+                    follower.followPath(p10_driveToShoot4, 0.7, true);
+                    setPathState(14);
+                }
+                break;
+            case 14: // Arrived, turn to face the goal
+                if (!follower.isBusy()) {
+                    follower.followPath(t5_turnToShoot, 0.7, true);
+                    setPathState(15);
+                }
+                break;
+            case 15: // Heading set, shoot cycle 4 (final), then stop
+                if (!follower.isBusy()) runShootSequence(null, 16);
+                break;
+
+            case 16:
                 if (!follower.isBusy()) stopRobot();
                 break;
         }
@@ -179,16 +288,52 @@ public class AutoFarBlue extends LinearOpMode {
 
     private void runShootSequence(PathChain nextPath, int nextState) {
         hood.setPosition(0);
-        double elapsed = pathTimer.getElapsedTimeSeconds();
 
-        if (elapsed < 4.0) {
-            stopper.setPosition(1); // Open
-            intake.setPower(-1.0);
-        } else {
-            stopper.setPosition(0); // Closed
+        // Initialize once per arrival at a shooting pose.  The timer must start here,
+        // not while the robot is still driving or turning into the shot.
+        if (!shootSequenceStarted) {
+            shootSequenceStarted = true;
+            shootFeedStartSeconds = -1.0;
+            shootNextPath = nextPath;
+            shootNextState = nextState;
+            pathTimer.resetTimer();
+        }
+
+        double elapsed = pathTimer.getElapsedTimeSeconds();
+        boolean shooterReady = Math.abs(shooter1.getVelocity()) >= SHOOT_VELOCITY - SHOOTER_READY_TOLERANCE
+                && Math.abs(shooter2.getVelocity()) >= SHOOT_VELOCITY - SHOOTER_READY_TOLERANCE;
+
+        // Keep the gate closed until both flywheels have reached speed.  Starting the
+        // shot timer only after that point prevents a slow spin-up from skipping balls.
+        if (shootFeedStartSeconds < 0.0
+                && (elapsed < MIN_SHOOTER_SPINUP_SECONDS || !shooterReady)) {
+            stopper.setPosition(STOPPER_CLOSED);
             intake.setPower(0);
-            if (nextPath != null) follower.followPath(nextPath, 0.8, true);
-            setPathState(nextState);
+            return;
+        }
+
+        if (shootFeedStartSeconds < 0.0) shootFeedStartSeconds = elapsed;
+
+        double shotCycleSeconds = BALL_FEED_SECONDS + BALL_SETTLE_SECONDS;
+        double feedElapsed = elapsed - shootFeedStartSeconds;
+        int shotIndex = (int) (feedElapsed / shotCycleSeconds);
+
+        if (shotIndex < BALLS_PER_SHOOT_CYCLE) {
+            double shotElapsed = feedElapsed % shotCycleSeconds;
+            boolean feedingBall = shotElapsed < BALL_FEED_SECONDS;
+            stopper.setPosition(feedingBall ? STOPPER_OPEN : STOPPER_CLOSED);
+            // Only run the intake while the stopper is open, so exactly one timed
+            // feed window is used for each planned ball.
+            intake.setPower(feedingBall ? -1.0 : 0);
+        } else {
+            ballsScored += BALLS_PER_SHOOT_CYCLE;
+            stopper.setPosition(STOPPER_CLOSED);
+            intake.setPower(0);
+            shootSequenceStarted = false;
+            shootFeedStartSeconds = -1.0;
+
+            if (shootNextPath != null) follower.followPath(shootNextPath, 0.8, true);
+            setPathState(shootNextState);
         }
     }
 
@@ -196,6 +341,7 @@ public class AutoFarBlue extends LinearOpMode {
         intake.setPower(0);
         shooter1.setVelocity(0);
         shooter2.setVelocity(0);
+        stopper.setPosition(STOPPER_CLOSED);
 
         // Save pose for TeleOp
         PoseStorage.currentPose = follower.getPose();
@@ -222,7 +368,11 @@ public class AutoFarBlue extends LinearOpMode {
         stopper = hardwareMap.get(Servo.class, "stopper");
         hood = hardwareMap.get(Servo.class, "hood");
 
-        stopper.setDirection(Servo.Direction.FORWARD);
+        // Set the safe state before Start is pressed.  State 0 keeps it closed for
+        // the entire first drive, so the robot always moves before it begins feeding.
+        stopper.setPosition(STOPPER_CLOSED);
+        intake.setPower(0);
+
         shooter1.setDirection(DcMotorSimple.Direction.REVERSE);
         shooter1.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         shooter2.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -243,6 +393,8 @@ public class AutoFarBlue extends LinearOpMode {
             updateTurret();
             telemetry.addData("State", pathState);
             telemetry.addData("Turret Pos", turret.getCurrentPosition());
+            telemetry.addData("Shots Planned/Timed", "%d / %d", PLANNED_SHOT_COUNT, ballsScored);
+            telemetry.addData("Stopper", shootSequenceStarted ? "shoot sequence" : "closed/transport");
             telemetry.update();
         }
     }
