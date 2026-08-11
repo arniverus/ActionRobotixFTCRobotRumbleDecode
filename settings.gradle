@@ -1,2 +1,4 @@
+rootProject.name = 'ActionRobotixFTCRobotRumbleDecode'
+
 include ':FtcRobotController'
 include ':TeamCode'
