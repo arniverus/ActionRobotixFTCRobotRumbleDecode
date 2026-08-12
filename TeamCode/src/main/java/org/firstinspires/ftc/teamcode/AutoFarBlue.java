@@ -14,8 +14,10 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "Far Blue Auto", group = "Blue")
+@Autonomous(name = "Far Blue Auto V3", group = "Blue")
 public class AutoFarBlue extends LinearOpMode {
+
+    private static final String BUILD_TAG = "FB-V3-2026-08-11";
 
     private Follower follower;
     private Timer pathTimer;
@@ -31,12 +33,9 @@ public class AutoFarBlue extends LinearOpMode {
     private final double SHOOT_VELOCITY = 1540;
     private static final int BALLS_PER_SHOOT_CYCLE = 3;
     private static final int PLANNED_SHOT_COUNT = 15;
-    private static final double MIN_SHOOTER_SPINUP_SECONDS = 0.45;
-    private static final double MAX_SHOOTER_READY_WAIT_SECONDS = 1.50;
-    private static final double SHOOTER_READY_TOLERANCE = 75.0;
-    private static final double BALL_FEED_SECONDS = 0.45;
-    private static final double BALL_SETTLE_SECONDS = 0.20;
-    private static final double PATH_END_TIMEOUT_SECONDS = 6.0;
+    private static final double SHOOTER_SETTLE_SECONDS = 0.75;
+    private static final double THREE_BALL_FEED_SECONDS = 2.75;
+    private static final double PATH_END_TIMEOUT_SECONDS = 4.5;
 
     // Turret PID Constants
     public static double Kp = 0.035, Ki = 0.0, Kd = 0.0032;
@@ -56,7 +55,6 @@ public class AutoFarBlue extends LinearOpMode {
     private boolean isFinished = false; // Flag to trigger zero-reset
     private int ballsScored = 0;
     private boolean shootSequenceStarted = false;
-    private double shootFeedStartSeconds = -1.0;
     private PathChain shootNextPath;
     private int shootNextState;
 
@@ -254,45 +252,32 @@ public class AutoFarBlue extends LinearOpMode {
         // not while the robot is still driving or turning into the shot.
         if (!shootSequenceStarted) {
             shootSequenceStarted = true;
-            shootFeedStartSeconds = -1.0;
             shootNextPath = nextPath;
             shootNextState = nextState;
             pathTimer.resetTimer();
         }
 
         double elapsed = pathTimer.getElapsedTimeSeconds();
-        boolean shooterReady = Math.abs(shooter1.getVelocity()) >= SHOOT_VELOCITY - SHOOTER_READY_TOLERANCE
-                && Math.abs(shooter2.getVelocity()) >= SHOOT_VELOCITY - SHOOTER_READY_TOLERANCE;
 
-        // Keep the gate closed until both flywheels have reached speed.  Starting the
-        // shot timer only after that point prevents a slow spin-up from skipping balls.
-        if (shootFeedStartSeconds < 0.0
-                && (elapsed < MIN_SHOOTER_SPINUP_SECONDS
-                || (!shooterReady && elapsed < MAX_SHOOTER_READY_WAIT_SECONDS))) {
+        // The flywheels start during the preceding drive. Keep the stopper fully in
+        // for a short settling period, without relying on possibly reversed/failed
+        // encoder readings that could otherwise freeze autonomous.
+        if (elapsed < SHOOTER_SETTLE_SECONDS) {
             stopper.setPosition(STOPPER_CLOSED);
             intake.setPower(0);
             return;
         }
 
-        if (shootFeedStartSeconds < 0.0) shootFeedStartSeconds = elapsed;
-
-        double shotCycleSeconds = BALL_FEED_SECONDS + BALL_SETTLE_SECONDS;
-        double feedElapsed = elapsed - shootFeedStartSeconds;
-        int shotIndex = (int) (feedElapsed / shotCycleSeconds);
-
-        if (shotIndex < BALLS_PER_SHOOT_CYCLE) {
-            double shotElapsed = feedElapsed % shotCycleSeconds;
-            boolean feedingBall = shotElapsed < BALL_FEED_SECONDS;
-            stopper.setPosition(feedingBall ? STOPPER_OPEN : STOPPER_CLOSED);
-            // Only run the intake while the stopper is open, so exactly one timed
-            // feed window is used for each planned ball.
-            intake.setPower(feedingBall ? -1.0 : 0);
+        // Match Far Blue TeleOp: logical position 1 is fully open. Leave the gate
+        // open continuously while the intake feeds the three loaded artifacts.
+        if (elapsed < SHOOTER_SETTLE_SECONDS + THREE_BALL_FEED_SECONDS) {
+            stopper.setPosition(STOPPER_OPEN);
+            intake.setPower(-1.0);
         } else {
             ballsScored += BALLS_PER_SHOOT_CYCLE;
             stopper.setPosition(STOPPER_CLOSED);
             intake.setPower(0);
             shootSequenceStarted = false;
-            shootFeedStartSeconds = -1.0;
 
             if (shootNextPath != null) follower.followPath(shootNextPath, 0.8, true);
             setPathState(shootNextState);
@@ -349,14 +334,22 @@ public class AutoFarBlue extends LinearOpMode {
         shooter2.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, pidf);
 
         buildPaths();
+
+        telemetry.addData("AUTO BUILD", BUILD_TAG);
+        telemetry.addLine("Select 'Far Blue Auto V3' on Driver Station");
+        telemetry.addLine("Stopper is commanded CLOSED during init");
+        telemetry.update();
         waitForStart();
+        if (isStopRequested()) return;
 
         setPathState(0);
         while (opModeIsActive()) {
             follower.update();
             autonomousPathUpdate();
             updateTurret();
+            telemetry.addData("AUTO BUILD", BUILD_TAG);
             telemetry.addData("State", pathState);
+            telemetry.addData("State Seconds", "%.2f", pathTimer.getElapsedTimeSeconds());
             telemetry.addData("Pose", follower.getPose());
             telemetry.addData("Path T", "%.3f", follower.getCurrentTValue());
             telemetry.addData("Follower Busy", follower.isBusy());
